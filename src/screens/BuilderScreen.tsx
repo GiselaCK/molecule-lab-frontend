@@ -80,6 +80,7 @@ export default function BuilderScreen() {
 
     try {
       const analysis = await analyzeMolecule(builder.atoms, builder.bonds);
+      console.log("Analise = ", analysis);
 
       // Se o admin forçou um resultado, sobrescreve o do backend
       if (admin.forceResult !== "auto") {
@@ -87,15 +88,13 @@ export default function BuilderScreen() {
       }
 
       setMoleculeAnalysis(analysis);
+      setIsSubmitting(false);
+      setScreen("simulation");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
       console.error("[moleculeApi] analyzeMolecule falhou:", msg);
       setApiError(msg);
-      // Continua para simulação mesmo sem análise (fallback heurístico local)
-      setMoleculeAnalysis(null);
-    } finally {
-      setIsSubmitting(false);
-      setScreen("simulation");
+      setScreen("api-error");
     }
   }, [
     builder.atoms,
