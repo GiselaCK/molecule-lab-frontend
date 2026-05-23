@@ -9,7 +9,7 @@ import BuilderToolbar from "@/components/builder/BuilderToolbar";
 import AtomPalette from "@/components/builder/AtomPalette";
 import PresetsPanel from "@/components/builder/PresetsPanel";
 import { ArrowLeft, Flame, Loader2 } from "lucide-react";
-import { analyzeMolecule } from "@/lib/moleculeApi";
+import { createMoleculeSimulation } from "@/lib/moleculeApi";
 
 type Tool = "select" | "add" | "move" | "delete" | "pan";
 type Tab = "free" | "presets";
@@ -63,10 +63,10 @@ export default function BuilderScreen() {
 
   /**
    * Ao clicar em "Testar":
-   *  1. Serializa a molécula em grafo e envia ao backend
-   *  2. Se o admin forçou resultado, ignora a resposta e usa o forçado
-   *  3. Armazena análise no contexto e navega para simulação
-   *  4. Se a chamada falhar, exibe o erro e ainda permite navegar (fallback local)
+   *  1. Serializa a molécula em grafo e cria uma simulação no backend
+   *  2. Armazena dados estáticos e a URL do stream no contexto
+   *  3. Navega para a tela de simulação, que acompanha os eventos SSE
+   *  4. Se a chamada falhar, exibe a tela de erro da API
    */
   const handleTest = useCallback(async () => {
     setApiError(null);
@@ -75,31 +75,33 @@ export default function BuilderScreen() {
     // Persiste a molécula no contexto independente de sucesso/falha da API
     setMolecule({
       atoms: builder.atoms,
-      bonds: builder.bonds.map((b) => ({ id: b.id, from: b.from, to: b.to })),
+      bonds: builder.bonds.map((b) => ({
+        id: b.id,
+        from: b.from,
+        to: b.to,
+        order: b.order,
+      })),
     });
 
     try {
-      const analysis = await analyzeMolecule(builder.atoms, builder.bonds);
-      console.log("Analise = ", analysis);
-
-      // Se o admin forçou um resultado, sobrescreve o do backend
-      if (admin.forceResult !== "auto") {
-        analysis.result = admin.forceResult;
-      }
-
+      const analysis = await createMoleculeSimulation(
+        builder.atoms,
+        builder.bonds,
+        admin.simulationPreset
+      );
       setMoleculeAnalysis(analysis);
       setIsSubmitting(false);
       setScreen("simulation");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      console.error("[moleculeApi] analyzeMolecule falhou:", msg);
+      console.error("[moleculeApi] createMoleculeSimulation falhou:", msg);
       setApiError(msg);
       setScreen("api-error");
     }
   }, [
     builder.atoms,
     builder.bonds,
-    admin.forceResult,
+    admin.simulationPreset,
     setMolecule,
     setMoleculeAnalysis,
     setScreen,
@@ -152,7 +154,7 @@ export default function BuilderScreen() {
           variant="hero"
           size="sm"
           onClick={handleTest}
-          disabled={builder.atoms.length < 2 || isSubmitting}
+          disabled={builder.atoms.length < 1 || isSubmitting}
         >
           {isSubmitting ? (
             <Loader2 className="w-4 h-4 mr-1 animate-spin" />
@@ -213,16 +215,6 @@ export default function BuilderScreen() {
         <main className="flex-1 relative p-3 flex gap-2 overflow-hidden min-h-0">
           <div className="z-10 shrink-0">
             <BuilderToolbar
-              tool={tool}
-              setTool={setTool}
-              canUndo={builder.canUndo}
-              canRedo={builder.canRedo}
-              onUndo={builder.undo}
-              onRedo={builder.redo}
-              onClear={builder.clearAll}
-              onComplete={builder.completeWithHydrogens}
-              showHydrogens={builder.showHydrogens}
-              onToggleH={() => builder.setShowHydrogens(!builder.showHydrogens)}
               tool={tool}
               setTool={setTool}
               canUndo={builder.canUndo}

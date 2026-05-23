@@ -1,4 +1,5 @@
-import { MoleculeData } from '@/context/ExperienceContext';
+import type { Atom, MoleculeData } from '@/context/ExperienceContext';
+import type { BondWithOrder } from '@/lib/moleculeEngine';
 
 const ATOM_COLORS: Record<string, string> = {
   H: '#E8E8E8',
@@ -14,111 +15,231 @@ const ATOM_COLORS: Record<string, string> = {
 
 export { ATOM_COLORS };
 
-const BL = 80; // bond length
+export type PresetMolecule = Omit<MoleculeData, 'bonds'> & {
+  description: string;
+  formula: string;
+  stability: number;
+  bonds: BondWithOrder[];
+};
+
 const HBL = 48; // H bond length
 
-function h(id: string, parent: { x: number; y: number }, angleDeg: number): { id: string; symbol: string; x: number; y: number; color: string } {
-  const rad = (angleDeg * Math.PI) / 180;
-  return { id, symbol: 'H', x: Math.round(parent.x + HBL * Math.cos(rad)), y: Math.round(parent.y + HBL * Math.sin(rad)), color: ATOM_COLORS.H };
+function atom(id: string, symbol: string, x: number, y: number): Atom {
+  return { id, symbol, x, y, color: ATOM_COLORS[symbol] || '#888' };
 }
 
-export const presetMolecules: (MoleculeData & { description: string; stability: number })[] = [
-  // Água
+function bond(id: string, from: string, to: string, order: 1 | 2 | 3 = 1): BondWithOrder {
+  return { id, from, to, order };
+}
+
+function h(id: string, parent: { x: number; y: number }, angleDeg: number): Atom {
+  const rad = (angleDeg * Math.PI) / 180;
+  return atom(
+    id,
+    'H',
+    Math.round(parent.x + HBL * Math.cos(rad)),
+    Math.round(parent.y + HBL * Math.sin(rad))
+  );
+}
+
+export const presetMolecules: PresetMolecule[] = [
   {
     name: 'Água (H₂O)',
-    description: 'A molécula essencial para a vida',
+    description: 'Molécula polar com duas ligações O-H',
+    formula: 'H2O',
     stability: 0.9,
     atoms: [
-      { id: 'o1', symbol: 'O', x: 300, y: 220, color: ATOM_COLORS.O },
+      atom('o1', 'O', 300, 220),
       h('h1', { x: 300, y: 220 }, -150),
       h('h2', { x: 300, y: 220 }, -30),
     ],
     bonds: [
-      { id: 'b1', from: 'o1', to: 'h1' },
-      { id: 'b2', from: 'o1', to: 'h2' },
+      bond('b1', 'o1', 'h1'),
+      bond('b2', 'o1', 'h2'),
     ],
   },
-  // Metano
   {
     name: 'Metano (CH₄)',
-    description: 'O gás natural mais simples',
+    description: 'Alcano mais simples, com quatro ligações C-H',
+    formula: 'CH4',
     stability: 0.85,
     atoms: [
-      { id: 'c1', symbol: 'C', x: 300, y: 220, color: ATOM_COLORS.C },
+      atom('c1', 'C', 300, 220),
       h('h1', { x: 300, y: 220 }, -90),
       h('h2', { x: 300, y: 220 }, 0),
       h('h3', { x: 300, y: 220 }, 90),
       h('h4', { x: 300, y: 220 }, 180),
     ],
     bonds: [
-      { id: 'b1', from: 'c1', to: 'h1' },
-      { id: 'b2', from: 'c1', to: 'h2' },
-      { id: 'b3', from: 'c1', to: 'h3' },
-      { id: 'b4', from: 'c1', to: 'h4' },
+      bond('b1', 'c1', 'h1'),
+      bond('b2', 'c1', 'h2'),
+      bond('b3', 'c1', 'h3'),
+      bond('b4', 'c1', 'h4'),
     ],
   },
-  // Amônia
   {
     name: 'Amônia (NH₃)',
-    description: 'Presente em fertilizantes e produtos de limpeza',
+    description: 'Base molecular simples com três ligações N-H',
+    formula: 'NH3',
     stability: 0.7,
     atoms: [
-      { id: 'n1', symbol: 'N', x: 300, y: 220, color: ATOM_COLORS.N },
+      atom('n1', 'N', 300, 220),
       h('h1', { x: 300, y: 220 }, -120),
       h('h2', { x: 300, y: 220 }, -60),
       h('h3', { x: 300, y: 220 }, 90),
     ],
     bonds: [
-      { id: 'b1', from: 'n1', to: 'h1' },
-      { id: 'b2', from: 'n1', to: 'h2' },
-      { id: 'b3', from: 'n1', to: 'h3' },
+      bond('b1', 'n1', 'h1'),
+      bond('b2', 'n1', 'h2'),
+      bond('b3', 'n1', 'h3'),
     ],
   },
-  // CO₂
   {
     name: 'Dióxido de Carbono (CO₂)',
-    description: 'Gás carbônico — vilão do efeito estufa',
+    description: 'Molécula linear O=C=O',
+    formula: 'CO2',
     stability: 0.95,
     atoms: [
-      { id: 'o1', symbol: 'O', x: 220, y: 220, color: ATOM_COLORS.O },
-      { id: 'c1', symbol: 'C', x: 300, y: 220, color: ATOM_COLORS.C },
-      { id: 'o2', symbol: 'O', x: 380, y: 220, color: ATOM_COLORS.O },
+      atom('o1', 'O', 220, 220),
+      atom('c1', 'C', 300, 220),
+      atom('o2', 'O', 380, 220),
     ],
     bonds: [
-      { id: 'b1', from: 'o1', to: 'c1' },
-      { id: 'b2', from: 'c1', to: 'o2' },
+      bond('b1', 'o1', 'c1', 2),
+      bond('b2', 'c1', 'o2', 2),
     ],
   },
-  // Etanol
+  {
+    name: 'Nitrogênio (N₂)',
+    description: 'Molécula diatômica com ligação tripla N≡N',
+    formula: 'N2',
+    stability: 0.98,
+    atoms: [
+      atom('n1', 'N', 260, 220),
+      atom('n2', 'N', 340, 220),
+    ],
+    bonds: [
+      bond('b1', 'n1', 'n2', 3),
+    ],
+  },
+  (() => {
+    const c1 = { x: 260, y: 220 };
+    const c2 = { x: 340, y: 220 };
+    return {
+      name: 'Eteno (C₂H₄)',
+      description: 'Alceno simples com ligação dupla C=C',
+      formula: 'C2H4',
+      stability: 0.68,
+      atoms: [
+        atom('c1', 'C', c1.x, c1.y),
+        atom('c2', 'C', c2.x, c2.y),
+        h('h1', c1, -130),
+        h('h2', c1, 130),
+        h('h3', c2, -50),
+        h('h4', c2, 50),
+      ],
+      bonds: [
+        bond('b1', 'c1', 'c2', 2),
+        bond('b2', 'c1', 'h1'),
+        bond('b3', 'c1', 'h2'),
+        bond('b4', 'c2', 'h3'),
+        bond('b5', 'c2', 'h4'),
+      ],
+    };
+  })(),
+  (() => {
+    const c1 = { x: 260, y: 220 };
+    const c2 = { x: 340, y: 220 };
+    return {
+      name: 'Etino / Acetileno (C₂H₂)',
+      description: 'Alcino simples com ligação tripla C≡C',
+      formula: 'C2H2',
+      stability: 0.64,
+      atoms: [
+        atom('c1', 'C', c1.x, c1.y),
+        atom('c2', 'C', c2.x, c2.y),
+        h('h1', c1, 180),
+        h('h2', c2, 0),
+      ],
+      bonds: [
+        bond('b1', 'c1', 'c2', 3),
+        bond('b2', 'c1', 'h1'),
+        bond('b3', 'c2', 'h2'),
+      ],
+    };
+  })(),
+  (() => {
+    const c1 = { x: 220, y: 220 };
+    const c2 = { x: 300, y: 220 };
+    const c3 = { x: 380, y: 220 };
+    return {
+      name: 'Propano (C₃H₈)',
+      description: 'Alcano de três carbonos',
+      formula: 'C3H8',
+      stability: 0.75,
+      atoms: [
+        atom('c1', 'C', c1.x, c1.y),
+        atom('c2', 'C', c2.x, c2.y),
+        atom('c3', 'C', c3.x, c3.y),
+        h('h1', c1, -90), h('h2', c1, 180), h('h3', c1, 90),
+        h('h4', c2, -90), h('h5', c2, 90),
+        h('h6', c3, -90), h('h7', c3, 0), h('h8', c3, 90),
+      ],
+      bonds: [
+        bond('b1', 'c1', 'c2'),
+        bond('b2', 'c2', 'c3'),
+        bond('b3', 'c1', 'h1'), bond('b4', 'c1', 'h2'), bond('b5', 'c1', 'h3'),
+        bond('b6', 'c2', 'h4'), bond('b7', 'c2', 'h5'),
+        bond('b8', 'c3', 'h6'), bond('b9', 'c3', 'h7'), bond('b10', 'c3', 'h8'),
+      ],
+    };
+  })(),
   (() => {
     const c1 = { x: 240, y: 220 };
-    const c2 = { x: 240 + BL, y: 220 };
-    const o1 = { x: 240 + BL * 2, y: 220 };
+    const c2 = { x: 320, y: 220 };
+    const o1 = { x: 400, y: 220 };
     return {
       name: 'Etanol (C₂H₆O)',
-      description: 'Presente em bebidas e combustíveis',
+      description: 'Álcool primário CH₃CH₂OH',
+      formula: 'C2H6O',
       stability: 0.6,
       atoms: [
-        { id: 'c1', symbol: 'C', ...c1, color: ATOM_COLORS.C },
-        { id: 'c2', symbol: 'C', ...c2, color: ATOM_COLORS.C },
-        { id: 'o1', symbol: 'O', ...o1, color: ATOM_COLORS.O },
+        atom('c1', 'C', c1.x, c1.y),
+        atom('c2', 'C', c2.x, c2.y),
+        atom('o1', 'O', o1.x, o1.y),
         h('h1', c1, -90), h('h2', c1, 180), h('h3', c1, 90),
         h('h4', c2, -90), h('h5', c2, 90),
         h('h6', o1, 0),
       ],
       bonds: [
-        { id: 'b1', from: 'c1', to: 'c2' },
-        { id: 'b2', from: 'c2', to: 'o1' },
-        { id: 'b3', from: 'c1', to: 'h1' },
-        { id: 'b4', from: 'c1', to: 'h2' },
-        { id: 'b5', from: 'c1', to: 'h3' },
-        { id: 'b6', from: 'c2', to: 'h4' },
-        { id: 'b7', from: 'c2', to: 'h5' },
-        { id: 'b8', from: 'o1', to: 'h6' },
+        bond('b1', 'c1', 'c2'),
+        bond('b2', 'c2', 'o1'),
+        bond('b3', 'c1', 'h1'),
+        bond('b4', 'c1', 'h2'),
+        bond('b5', 'c1', 'h3'),
+        bond('b6', 'c2', 'h4'),
+        bond('b7', 'c2', 'h5'),
+        bond('b8', 'o1', 'h6'),
       ],
     };
   })(),
-  // Ácido Acético
+  {
+    name: 'Formaldeído (CH₂O)',
+    description: 'Aldeído mais simples, H₂C=O',
+    formula: 'CH2O',
+    stability: 0.55,
+    atoms: [
+      atom('c1', 'C', 300, 220),
+      atom('o1', 'O', 380, 220),
+      h('h1', { x: 300, y: 220 }, -120),
+      h('h2', { x: 300, y: 220 }, 120),
+    ],
+    bonds: [
+      bond('b1', 'c1', 'o1', 2),
+      bond('b2', 'c1', 'h1'),
+      bond('b3', 'c1', 'h2'),
+    ],
+  },
   (() => {
     const c1 = { x: 220, y: 220 };
     const c2 = { x: 300, y: 220 };
@@ -126,173 +247,147 @@ export const presetMolecules: (MoleculeData & { description: string; stability: 
     const o2 = { x: 380, y: 260 };
     return {
       name: 'Ácido Acético (CH₃COOH)',
-      description: 'O ácido do vinagre',
+      description: 'Ácido carboxílico do vinagre',
+      formula: 'C2H4O2',
       stability: 0.65,
       atoms: [
-        { id: 'c1', symbol: 'C', ...c1, color: ATOM_COLORS.C },
-        { id: 'c2', symbol: 'C', ...c2, color: ATOM_COLORS.C },
-        { id: 'o1', symbol: 'O', ...o1, color: ATOM_COLORS.O },
-        { id: 'o2', symbol: 'O', ...o2, color: ATOM_COLORS.O },
+        atom('c1', 'C', c1.x, c1.y),
+        atom('c2', 'C', c2.x, c2.y),
+        atom('o1', 'O', o1.x, o1.y),
+        atom('o2', 'O', o2.x, o2.y),
         h('h1', c1, -90), h('h2', c1, 90), h('h3', c1, 180),
-        h('h4', o2, 90),
+        h('h4', o2, 45),
       ],
       bonds: [
-        { id: 'b1', from: 'c1', to: 'c2' },
-        { id: 'b2', from: 'c2', to: 'o1' },
-        { id: 'b3', from: 'c2', to: 'o2' },
-        { id: 'b4', from: 'c1', to: 'h1' },
-        { id: 'b5', from: 'c1', to: 'h2' },
-        { id: 'b6', from: 'c1', to: 'h3' },
-        { id: 'b7', from: 'o2', to: 'h4' },
+        bond('b1', 'c1', 'c2'),
+        bond('b2', 'c2', 'o1', 2),
+        bond('b3', 'c2', 'o2'),
+        bond('b4', 'c1', 'h1'),
+        bond('b5', 'c1', 'h2'),
+        bond('b6', 'c1', 'h3'),
+        bond('b7', 'o2', 'h4'),
       ],
     };
   })(),
-  // Benzeno
+  (() => {
+    const c1 = { x: 220, y: 220 };
+    const c2 = { x: 300, y: 220 };
+    const c3 = { x: 380, y: 220 };
+    const o1 = { x: 300, y: 140 };
+    return {
+      name: 'Acetona (C₃H₆O)',
+      description: 'Cetona simples, CH₃COCH₃',
+      formula: 'C3H6O',
+      stability: 0.58,
+      atoms: [
+        atom('c1', 'C', c1.x, c1.y),
+        atom('c2', 'C', c2.x, c2.y),
+        atom('c3', 'C', c3.x, c3.y),
+        atom('o1', 'O', o1.x, o1.y),
+        h('h1', c1, -90), h('h2', c1, 180), h('h3', c1, 90),
+        h('h4', c3, -90), h('h5', c3, 0), h('h6', c3, 90),
+      ],
+      bonds: [
+        bond('b1', 'c1', 'c2'),
+        bond('b2', 'c2', 'c3'),
+        bond('b3', 'c2', 'o1', 2),
+        bond('b4', 'c1', 'h1'),
+        bond('b5', 'c1', 'h2'),
+        bond('b6', 'c1', 'h3'),
+        bond('b7', 'c3', 'h4'),
+        bond('b8', 'c3', 'h5'),
+        bond('b9', 'c3', 'h6'),
+      ],
+    };
+  })(),
   (() => {
     const cx = 310, cy = 230, r = 75;
     const carbons = Array.from({ length: 6 }, (_, i) => {
       const angle = (i * 60 - 90) * Math.PI / 180;
-      return { id: `c${i+1}`, symbol: 'C', x: Math.round(cx + r * Math.cos(angle)), y: Math.round(cy + r * Math.sin(angle)), color: ATOM_COLORS.C };
+      return atom(
+        `c${i + 1}`,
+        'C',
+        Math.round(cx + r * Math.cos(angle)),
+        Math.round(cy + r * Math.sin(angle))
+      );
     });
-    const hydrogens = carbons.map((c, i) => {
-      const angle = (i * 60 - 90);
-      return h(`h${i+1}`, c, angle);
-    });
-    const bondList = carbons.map((c, i) => ({
-      id: `b${i+1}`, from: c.id, to: carbons[(i+1) % 6].id
-    }));
-    const hBonds = carbons.map((c, i) => ({
-      id: `bh${i+1}`, from: c.id, to: `h${i+1}`
-    }));
+    const hydrogens = carbons.map((c, i) => h(`h${i + 1}`, c, i * 60 - 90));
+    const ringBonds = carbons.map((c, i) =>
+      bond(`b${i + 1}`, c.id, carbons[(i + 1) % 6].id, i % 2 === 0 ? 2 : 1)
+    );
+    const hBonds = carbons.map((c, i) => bond(`bh${i + 1}`, c.id, `h${i + 1}`));
     return {
       name: 'Benzeno (C₆H₆)',
-      description: 'Anel aromático — base da química orgânica',
+      description: 'Anel aromático representado em forma de Kekulé',
+      formula: 'C6H6',
       stability: 0.88,
       atoms: [...carbons, ...hydrogens],
-      bonds: [...bondList, ...hBonds],
+      bonds: [...ringBonds, ...hBonds],
     };
   })(),
-  // Glicose simplificada (cadeia aberta)
   (() => {
-    const atoms: MoleculeData['atoms'] = [];
-    const bonds: MoleculeData['bonds'] = [];
-    // 6 carbons in a zigzag chain
-    for (let i = 0; i < 6; i++) {
-      const x = 160 + i * 70;
-      const y = 200 + (i % 2 === 0 ? -20 : 20);
-      atoms.push({ id: `c${i+1}`, symbol: 'C', x, y, color: ATOM_COLORS.C });
-      if (i > 0) bonds.push({ id: `bc${i}`, from: `c${i}`, to: `c${i+1}` });
+    const atoms: Atom[] = [];
+    const bonds: BondWithOrder[] = [];
+    const carbonPositions = Array.from({ length: 6 }, (_, i) => ({
+      id: `c${i + 1}`,
+      x: 130 + i * 78,
+      y: 220 + (i % 2 === 0 ? -18 : 18),
+    }));
+
+    carbonPositions.forEach((c) => atoms.push(atom(c.id, 'C', c.x, c.y)));
+    for (let i = 1; i < carbonPositions.length; i++) {
+      bonds.push(bond(`bc${i}`, `c${i}`, `c${i + 1}`));
     }
-    // O on C1 (aldehyde)
-    atoms.push({ id: 'o_ald', symbol: 'O', x: 130, y: 150, color: ATOM_COLORS.O });
-    bonds.push({ id: 'bo_ald', from: 'c1', to: 'o_ald' });
-    // OH groups on C2-C5
-    for (let i = 1; i < 5; i++) {
-      const c = atoms.find(a => a.id === `c${i+1}`)!;
-      const oDir = i % 2 === 0 ? -1 : 1;
-      atoms.push({ id: `oh${i}`, symbol: 'O', x: c.x, y: c.y + oDir * 55, color: ATOM_COLORS.O });
-      bonds.push({ id: `boh${i}`, from: `c${i+1}`, to: `oh${i}` });
+
+    atoms.push(atom('o1', 'O', 70, 170));
+    atoms.push(h('h_c1', carbonPositions[0], 120));
+    bonds.push(bond('b_c1_o1', 'c1', 'o1', 2));
+    bonds.push(bond('b_c1_h', 'c1', 'h_c1'));
+
+    for (let i = 2; i <= 5; i++) {
+      const c = carbonPositions[i - 1];
+      const ohUp = i % 2 === 0;
+      const oxygenId = `o${i}`;
+      const oxygen = atom(oxygenId, 'O', c.x, c.y + (ohUp ? -58 : 58));
+      atoms.push(oxygen);
+      atoms.push(h(`h_c${i}`, c, ohUp ? 80 : -80));
+      atoms.push(h(`h_o${i}`, oxygen, ohUp ? -90 : 90));
+      bonds.push(bond(`b_c${i}_o`, `c${i}`, oxygenId));
+      bonds.push(bond(`b_c${i}_h`, `c${i}`, `h_c${i}`));
+      bonds.push(bond(`b_o${i}_h`, oxygenId, `h_o${i}`));
     }
-    // CH2OH on C6
-    atoms.push({ id: 'o6', symbol: 'O', x: 530, y: 230, color: ATOM_COLORS.O });
-    bonds.push({ id: 'bo6', from: 'c6', to: 'o6' });
+
+    const c6 = carbonPositions[5];
+    const o6 = atom('o6', 'O', c6.x + 58, c6.y + 54);
+    atoms.push(o6);
+    atoms.push(h('h_c6a', c6, -70));
+    atoms.push(h('h_c6b', c6, 80));
+    atoms.push(h('h_o6', o6, 45));
+    bonds.push(bond('b_c6_o6', 'c6', 'o6'));
+    bonds.push(bond('b_c6_h1', 'c6', 'h_c6a'));
+    bonds.push(bond('b_c6_h2', 'c6', 'h_c6b'));
+    bonds.push(bond('b_o6_h', 'o6', 'h_o6'));
+
     return {
-      name: 'Glicose (simplificada)',
-      description: 'Açúcar essencial — fonte de energia celular',
+      name: 'Glicose aberta (C₆H₁₂O₆)',
+      description: 'Aldohexose em cadeia aberta, sem estereoquímica 3D',
+      formula: 'C6H12O6',
       stability: 0.5,
       atoms,
       bonds,
     };
   })(),
-  // Cafeína simplificada
-  (() => {
-    // Simplified purine ring system
-    const atoms: MoleculeData['atoms'] = [
-      { id: 'n1', symbol: 'N', x: 220, y: 180, color: ATOM_COLORS.N },
-      { id: 'c2', symbol: 'C', x: 290, y: 150, color: ATOM_COLORS.C },
-      { id: 'n3', symbol: 'N', x: 360, y: 180, color: ATOM_COLORS.N },
-      { id: 'c4', symbol: 'C', x: 360, y: 260, color: ATOM_COLORS.C },
-      { id: 'c5', symbol: 'C', x: 290, y: 290, color: ATOM_COLORS.C },
-      { id: 'c6', symbol: 'C', x: 220, y: 260, color: ATOM_COLORS.C },
-      { id: 'n7', symbol: 'N', x: 420, y: 300, color: ATOM_COLORS.N },
-      { id: 'c8', symbol: 'C', x: 420, y: 220, color: ATOM_COLORS.C },
-      { id: 'o_c2', symbol: 'O', x: 290, y: 80, color: ATOM_COLORS.O },
-      { id: 'o_c6', symbol: 'O', x: 160, y: 290, color: ATOM_COLORS.O },
-    ];
-    const bonds: MoleculeData['bonds'] = [
-      { id: 'b1', from: 'n1', to: 'c2' },
-      { id: 'b2', from: 'c2', to: 'n3' },
-      { id: 'b3', from: 'n3', to: 'c4' },
-      { id: 'b4', from: 'c4', to: 'c5' },
-      { id: 'b5', from: 'c5', to: 'c6' },
-      { id: 'b6', from: 'c6', to: 'n1' },
-      { id: 'b7', from: 'c4', to: 'n7' },
-      { id: 'b8', from: 'n7', to: 'c8' },
-      { id: 'b9', from: 'c2', to: 'o_c2' },
-      { id: 'b10', from: 'c6', to: 'o_c6' },
-    ];
-    return {
-      name: 'Cafeína (simplificada)',
-      description: 'O estimulante do café ☕',
-      stability: 0.72,
-      atoms,
-      bonds,
-    };
-  })(),
-  // Propano
-  (() => {
-    const c1 = { x: 220, y: 220 };
-    const c2 = { x: 300, y: 220 };
-    const c3 = { x: 380, y: 220 };
-    return {
-      name: 'Propano (C₃H₈)',
-      description: 'Gás usado em botijões de cozinha',
-      stability: 0.75,
-      atoms: [
-        { id: 'c1', symbol: 'C', ...c1, color: ATOM_COLORS.C },
-        { id: 'c2', symbol: 'C', ...c2, color: ATOM_COLORS.C },
-        { id: 'c3', symbol: 'C', ...c3, color: ATOM_COLORS.C },
-        h('h1', c1, -90), h('h2', c1, 180), h('h3', c1, 90),
-        h('h4', c2, -90), h('h5', c2, 90),
-        h('h6', c3, -90), h('h7', c3, 0), h('h8', c3, 90),
-      ],
-      bonds: [
-        { id: 'b1', from: 'c1', to: 'c2' },
-        { id: 'b2', from: 'c2', to: 'c3' },
-        { id: 'b3', from: 'c1', to: 'h1' }, { id: 'b4', from: 'c1', to: 'h2' }, { id: 'b5', from: 'c1', to: 'h3' },
-        { id: 'b6', from: 'c2', to: 'h4' }, { id: 'b7', from: 'c2', to: 'h5' },
-        { id: 'b8', from: 'c3', to: 'h6' }, { id: 'b9', from: 'c3', to: 'h7' }, { id: 'b10', from: 'c3', to: 'h8' },
-      ],
-    };
-  })(),
-  // Formaldeído
-  {
-    name: 'Formaldeído (CH₂O)',
-    description: 'Conservante e desinfetante',
-    stability: 0.55,
-    atoms: [
-      { id: 'c1', symbol: 'C', x: 300, y: 220, color: ATOM_COLORS.C },
-      { id: 'o1', symbol: 'O', x: 380, y: 220, color: ATOM_COLORS.O },
-      h('h1', { x: 300, y: 220 }, -120),
-      h('h2', { x: 300, y: 220 }, 120),
-    ],
-    bonds: [
-      { id: 'b1', from: 'c1', to: 'o1' },
-      { id: 'b2', from: 'c1', to: 'h1' },
-      { id: 'b3', from: 'c1', to: 'h2' },
-    ],
-  },
-  // Ácido clorídrico
   {
     name: 'Ácido Clorídrico (HCl)',
-    description: 'Ácido forte presente no estômago',
+    description: 'Molécula diatômica polar H-Cl',
+    formula: 'HCl',
     stability: 0.8,
     atoms: [
-      { id: 'cl1', symbol: 'Cl', x: 300, y: 220, color: ATOM_COLORS.Cl },
+      atom('cl1', 'Cl', 300, 220),
       h('h1', { x: 300, y: 220 }, 180),
     ],
     bonds: [
-      { id: 'b1', from: 'cl1', to: 'h1' },
+      bond('b1', 'cl1', 'h1'),
     ],
   },
 ];

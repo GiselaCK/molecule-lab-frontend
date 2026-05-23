@@ -9,8 +9,9 @@ interface PresetsPanelProps {
 
 export default function PresetsPanel({ onLoad }: PresetsPanelProps) {
   const handleLoad = (preset: typeof presetMolecules[0]) => {
-    const bonds: BondWithOrder[] = preset.bonds.map(b => ({ ...b, order: 1 }));
-    onLoad(preset.atoms, bonds);
+    const atoms: Atom[] = preset.atoms.map(a => ({ ...a }));
+    const bonds: BondWithOrder[] = preset.bonds.map(b => ({ ...b, order: b.order ?? 1 }));
+    onLoad(atoms, bonds);
   };
 
   return (

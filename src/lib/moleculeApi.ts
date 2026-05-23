@@ -8,11 +8,12 @@
  *
  * Formato do grafo enviado ao backend:
  *
- *   POST /api/molecule/analyze
+ *   POST /api/simulations
  *   {
+ *     "preset": "fast",
  *     "graph": {
  *       "atoms": [ { "id": "a1", "symbol": "C", "x": 350.0, "y": 300.0 }, ... ],
- *       "bonds": [ { "id": "b1", "from": "a1", "to": "a2", "order": 2 },   ... ]
+ *       "bonds": [ { "from": "a1", "to": "a2", "order": 2 }, ... ]
  *     }
  *   }
  *
@@ -43,8 +44,6 @@ export interface MoleculeGraphAtom {
 }
 
 export interface MoleculeGraphBond {
-  /** ID único da ligação */
-  id: string;
   /** ID do átomo de origem */
   from: string;
   /** ID do átomo de destino */
@@ -67,6 +66,14 @@ export interface MoleculeGraph {
 
 export interface AnalyzeRequest {
   graph: MoleculeGraph;
+}
+
+export type SimulationPresetName = 'fast' | 'balanced' | 'debug';
+
+export interface SimulationCreateRequest {
+  graph: MoleculeGraph;
+  preset: SimulationPresetName;
+  seed?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,9 +108,26 @@ export interface BrokenBond {
   r0: number;
   /** Fração V/Dₑ — quão próxima da dissociação (0 a 1) */
   fraction: number;
+  /** Índice do átomo i na topologia simulada, quando enviado pelo backend */
+  atom_i_index?: number;
+  /** Índice do átomo j na topologia simulada, quando enviado pelo backend */
+  atom_j_index?: number;
+}
+
+export interface StaticMoleculeInfo {
+  smiles: string;
+  formula: string;
+  molecular_weight: number;
+  properties: MoleculeProperties;
 }
 
 export interface MoleculeAnalysis {
+  /** ID da simulação criada no backend */
+  simulation_id: string;
+  /** Preset usado pelo backend */
+  preset: SimulationPresetName;
+  /** URL relativa ou absoluta do stream SSE */
+  events_url: string;
   /** Notação SMILES gerada pelo RDKit */
   smiles: string;
   /** Fórmula molecular, e.g. "C6H6" */
@@ -115,7 +139,9 @@ export interface MoleculeAnalysis {
   /** Molécula válida quimicamente segundo o RDKit */
   valid: boolean;
   /** Resultado da simulação de dinâmica molecular */
-  result: 'stable' | 'break';
+  result: 'stable' | 'break' | null;
+  /** Passo em que a primeira ruptura persistente foi detectada */
+  break_step?: number | null;
   /**
    * Temperatura alvo (K) no instante em que a primeira ligação rompeu.
    * Null quando result === 'stable'.
@@ -125,8 +151,64 @@ export interface MoleculeAnalysis {
   broken_bonds: BrokenBond[];
   /** Propriedades calculadas pelo RDKit */
   properties: MoleculeProperties;
+  /** Séries completas retornadas no evento final */
+  temperatures?: number[];
+  target_temperatures?: number[];
+  /** Tempo de simulação reportado pelo backend */
+  elapsed_seconds?: number;
+  /** Indica se o resultado veio do cache em memória do backend */
+  cached?: boolean;
   /** Mensagem de erro, se houver */
   error: string | null;
+}
+
+export interface SimulationCreateResponse {
+  simulation_id: string;
+  preset: SimulationPresetName;
+  molecule: StaticMoleculeInfo;
+  events_url: string;
+}
+
+export interface SimulationProgressEvent {
+  step: number;
+  n_steps: number;
+  progress: number;
+  target_temperature: number;
+  current_temperature: number;
+  potential_energy: number;
+  kinetic_energy: number;
+  candidate_broken_bonds: BrokenBond[];
+}
+
+export interface SimulationResultEvent {
+  result: 'stable' | 'break';
+  break_step: number | null;
+  break_temperature: number | null;
+  broken_bonds: BrokenBond[];
+  symbols: string[];
+  temperatures: number[];
+  target_temperatures: number[];
+  elapsed_seconds: number;
+  cached: boolean;
+}
+
+export interface SimulationCacheHitEvent {
+  smiles: string;
+  preset: SimulationPresetName;
+  seed: number;
+  message: string;
+}
+
+export interface SimulationMetadataEvent {
+  simulation_id: string;
+  preset: SimulationPresetName;
+  seed: number | null;
+  molecule: StaticMoleculeInfo;
+}
+
+export interface SimulationErrorEvent {
+  code: string;
+  message: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +230,6 @@ export function toMoleculeGraph(atoms: Atom[], bonds: BondWithOrder[]): Molecule
       y: a.y,
     })),
     bonds: bonds.map((b) => ({
-      id: b.id,
       from: b.from,
       to: b.to,
       order: Math.min(Math.max(b.order, 1), 3) as 1 | 2 | 3,
@@ -178,22 +259,25 @@ const API_BASE =
 // ---------------------------------------------------------------------------
 
 /**
- * Envia o grafo da molécula para o backend e retorna a análise do RDKit.
+ * Cria uma simulação no backend e retorna os dados estáticos da molécula.
  *
  * Uso:
- *   const analysis = await analyzeMolecule(atoms, bonds);
+ *   const analysis = await createMoleculeSimulation(atoms, bonds, "fast");
  *
  * Em caso de erro de rede ou resposta HTTP não-ok, lança um Error
  * com mensagem descritiva.
  */
-export async function analyzeMolecule(
+export async function createMoleculeSimulation(
   atoms: Atom[],
   bonds: BondWithOrder[],
+  preset: SimulationPresetName = 'fast',
+  seed?: number,
 ): Promise<MoleculeAnalysis> {
   const graph = toMoleculeGraph(atoms, bonds);
-  const payload: AnalyzeRequest = { graph };
+  const payload: SimulationCreateRequest = { graph, preset };
+  if (seed !== undefined) payload.seed = seed;
 
-  const response = await fetch(`${API_BASE}/api/molecule/analyze`, {
+  const response = await fetch(`${API_BASE}/api/simulations`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -203,18 +287,86 @@ export async function analyzeMolecule(
   });
 
   if (!response.ok) {
-    let detail = `HTTP ${response.status}`;
-    try {
-      const err = await response.json();
-      detail = err?.detail ?? err?.error ?? detail;
-    } catch {
-      // ignora falha ao parsear o corpo do erro
-    }
-    throw new Error(`Erro do servidor: ${detail}`);
+    throw new Error(`Erro do servidor: ${await getErrorDetail(response)}`);
   }
 
-  const data: MoleculeAnalysis = await response.json();
-  return data;
+  const data: SimulationCreateResponse = await response.json();
+  return {
+    simulation_id: data.simulation_id,
+    preset: data.preset,
+    events_url: data.events_url,
+    smiles: data.molecule.smiles,
+    formula: data.molecule.formula,
+    name: null,
+    molecular_weight: data.molecule.molecular_weight,
+    valid: true,
+    result: null,
+    break_step: null,
+    break_temperature: null,
+    broken_bonds: [],
+    properties: data.molecule.properties,
+    error: null,
+  };
+}
+
+export function streamSimulationEvents(
+  eventsUrl: string,
+  handlers: {
+    onMetadata?: (event: SimulationMetadataEvent) => void;
+    onProgress?: (event: SimulationProgressEvent) => void;
+    onCacheHit?: (event: SimulationCacheHitEvent) => void;
+    onResult?: (event: SimulationResultEvent) => void;
+    onError?: (error: Error | SimulationErrorEvent) => void;
+  },
+): () => void {
+  const source = new EventSource(resolveApiUrl(eventsUrl));
+
+  source.addEventListener('metadata', (event) => {
+    handlers.onMetadata?.(parseSseData<SimulationMetadataEvent>(event));
+  });
+  source.addEventListener('progress', (event) => {
+    handlers.onProgress?.(parseSseData<SimulationProgressEvent>(event));
+  });
+  source.addEventListener('cache_hit', (event) => {
+    handlers.onCacheHit?.(parseSseData<SimulationCacheHitEvent>(event));
+  });
+  source.addEventListener('result', (event) => {
+    handlers.onResult?.(parseSseData<SimulationResultEvent>(event));
+    source.close();
+  });
+  source.addEventListener('error', (event) => {
+    if ('data' in event && typeof event.data === 'string' && event.data) {
+      handlers.onError?.(parseSseData<SimulationErrorEvent>(event as MessageEvent<string>));
+    } else {
+      handlers.onError?.(new Error('Conexão com o stream da simulação foi interrompida.'));
+    }
+    source.close();
+  });
+
+  return () => source.close();
+}
+
+function resolveApiUrl(pathOrUrl: string): string {
+  if (/^https?:\/\//.test(pathOrUrl)) return pathOrUrl;
+  return `${API_BASE}${pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`}`;
+}
+
+function parseSseData<T>(event: MessageEvent<string>): T {
+  return JSON.parse(event.data) as T;
+}
+
+async function getErrorDetail(response: Response): Promise<string> {
+  let detail = `HTTP ${response.status}`;
+  try {
+    const err = await response.json();
+    if (typeof err?.detail === 'string') detail = err.detail;
+    else if (typeof err?.detail?.message === 'string') detail = err.detail.message;
+    else if (typeof err?.message === 'string') detail = err.message;
+    else if (typeof err?.error === 'string') detail = err.error;
+  } catch {
+    // ignora falha ao parsear o corpo do erro
+  }
+  return detail;
 }
 
 // ---------------------------------------------------------------------------

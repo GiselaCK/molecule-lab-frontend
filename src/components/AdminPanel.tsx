@@ -43,6 +43,26 @@ export default function AdminPanel() {
           />
         </div>
 
+        {/* Backend preset */}
+        <div>
+          <label className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-2 block">
+            Preset do backend
+          </label>
+          <div className="flex gap-2">
+            {(['fast', 'balanced', 'debug'] as const).map(opt => (
+              <button
+                key={opt}
+                onClick={() => update({ simulationPreset: opt })}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                  admin.simulationPreset === opt ? 'gradient-bg text-primary-foreground' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {opt === 'fast' ? 'Rápido' : opt === 'balanced' ? 'Balanceado' : 'Debug'}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Force result */}
         <div>
           <label className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-2 block">

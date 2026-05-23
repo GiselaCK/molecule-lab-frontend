@@ -1,7 +1,7 @@
 /** @format */
 
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import { MoleculeAnalysis } from "@/lib/moleculeApi";
+import { MoleculeAnalysis, SimulationPresetName } from "@/lib/moleculeApi";
 
 export interface Atom {
   id: string;
@@ -15,6 +15,7 @@ export interface Bond {
   id: string;
   from: string;
   to: string;
+  order?: number;
 }
 
 export interface MoleculeData {
@@ -25,6 +26,7 @@ export interface MoleculeData {
 
 export interface AdminSettings {
   simulationIntensity: number; // 1-10
+  simulationPreset: SimulationPresetName;
   forceResult: "auto" | "stable" | "break";
   animationDuration: "short" | "medium" | "long";
   stableMessage: string;
@@ -59,6 +61,7 @@ interface ExperienceState {
 
 const defaultAdmin: AdminSettings = {
   simulationIntensity: 5,
+  simulationPreset: "fast",
   forceResult: "auto",
   animationDuration: "medium",
   stableMessage: "Sua molécula resistiu ao calor! 🎉",

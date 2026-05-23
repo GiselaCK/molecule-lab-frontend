@@ -4,6 +4,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useExperience, Atom } from "@/context/ExperienceContext";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, RotateCcw } from "lucide-react";
+import {
+  BrokenBond,
+  MoleculeAnalysis,
+  streamSimulationEvents,
+} from "@/lib/moleculeApi";
 
 function fitMolecule(
   atoms: Atom[],
@@ -74,6 +79,7 @@ export default function SimulationScreen() {
     molecule,
     admin,
     setSimulationResult,
+    setMoleculeAnalysis,
     setScreen,
     simulationResult,
     moleculeAnalysis,
@@ -83,6 +89,11 @@ export default function SimulationScreen() {
   const [progress, setProgress] = useState(0);
   const [temperature, setTemperature] = useState(25);
   const [bondPulse, setBondPulse] = useState(0);
+  const [streamStatus, setStreamStatus] = useState<
+    "idle" | "connecting" | "running" | "complete" | "error"
+  >("idle");
+  const [cacheMessage, setCacheMessage] = useState<string | null>(null);
+  const [candidateBrokenBonds, setCandidateBrokenBonds] = useState<BrokenBond[]>([]);
 
   const [atomOffsets, setAtomOffsets] = useState<
     Record<string, { dx: number; dy: number }>
@@ -92,6 +103,9 @@ export default function SimulationScreen() {
 
   const svgRef = useRef<SVGSVGElement>(null);
   const animFrameRef = useRef<number>(0);
+  const progressRef = useRef(0);
+  const analysisRef = useRef<MoleculeAnalysis | null>(moleculeAnalysis);
+  const forceResultRef = useRef(admin.forceResult);
 
   const SVG_W = 900;
   const SVG_H = 700;
@@ -103,56 +117,126 @@ export default function SimulationScreen() {
 
   const fittedBonds = molecule.bonds;
 
-  const durations = {
-    short: 4000,
-    medium: 7000,
-    long: 10000,
-  };
-
-  const totalDuration = durations[admin.animationDuration];
+  useEffect(() => {
+    progressRef.current = progress;
+  }, [progress]);
 
   useEffect(() => {
-    let result: "stable" | "break";
+    analysisRef.current = moleculeAnalysis;
+  }, [moleculeAnalysis]);
 
-    if (admin.forceResult === "stable") {
-      result = "stable";
-    } else if (admin.forceResult === "break") {
-      result = "break";
-    } else if (moleculeAnalysis?.result) {
-      result = moleculeAnalysis.result;
-    } else {
-      const ratio = molecule.bonds.length / Math.max(molecule.atoms.length, 1);
+  useEffect(() => {
+    forceResultRef.current = admin.forceResult;
+  }, [admin.forceResult]);
 
-      result = ratio >= 0.8 ? "stable" : "break";
+  useEffect(() => {
+    if (admin.forceResult === "stable" || admin.forceResult === "break") {
+      setSimulationResult(admin.forceResult);
+      return;
     }
 
-    setSimulationResult(result);
-  }, [molecule, admin.forceResult, moleculeAnalysis, setSimulationResult]);
-
-  const breakProgressTarget =
-    moleculeAnalysis?.break_temperature != null
-      ? Math.max(0.05, moleculeAnalysis.break_temperature / 10000)
-      : 1;
-
-  const effectiveDuration = totalDuration * breakProgressTarget;
+    setSimulationResult(moleculeAnalysis?.result ?? null);
+  }, [admin.forceResult, moleculeAnalysis?.result, setSimulationResult]);
 
   useEffect(() => {
-    const start = Date.now();
+    if (!moleculeAnalysis?.events_url) {
+      setStreamStatus("error");
+      setScreen("api-error");
+      return;
+    }
+
+    let cancelled = false;
+    setPhase("heating");
+    setProgress(0);
+    setTemperature(25);
+    setCacheMessage(null);
+    setCandidateBrokenBonds([]);
+    setStreamStatus("connecting");
+
+    const stop = streamSimulationEvents(moleculeAnalysis.events_url, {
+      onMetadata: () => {
+        if (!cancelled) setStreamStatus("running");
+      },
+      onProgress: (event) => {
+        if (cancelled) return;
+        setStreamStatus("running");
+        setProgress(Math.max(0, Math.min(1, event.progress)));
+        setTemperature(Math.round(event.target_temperature));
+        setCandidateBrokenBonds(event.candidate_broken_bonds ?? []);
+      },
+      onCacheHit: (event) => {
+        if (!cancelled) setCacheMessage(event.message);
+      },
+      onResult: (event) => {
+        if (cancelled) return;
+        const forceResult = forceResultRef.current;
+        const forcedResult =
+          forceResult === "stable" || forceResult === "break"
+            ? forceResult
+            : event.result;
+        const current = analysisRef.current;
+
+        setSimulationResult(forcedResult);
+        setProgress(1);
+        setTemperature(
+          Math.round(
+            event.break_temperature ??
+              event.target_temperatures[event.target_temperatures.length - 1] ??
+              10000
+          )
+        );
+        setCandidateBrokenBonds([]);
+        setStreamStatus("complete");
+
+        if (current) {
+          setMoleculeAnalysis({
+            ...current,
+            result: forcedResult,
+            break_step: event.break_step,
+            break_temperature: event.break_temperature,
+            broken_bonds: event.broken_bonds,
+            temperatures: event.temperatures,
+            target_temperatures: event.target_temperatures,
+            elapsed_seconds: event.elapsed_seconds,
+            cached: event.cached,
+          });
+        }
+
+        window.setTimeout(() => {
+          if (!cancelled) setPhase("result");
+        }, 600);
+      },
+      onError: (error) => {
+        if (cancelled) return;
+        console.error("[moleculeApi] streamSimulationEvents falhou:", error);
+        setStreamStatus("error");
+        setScreen("api-error");
+      },
+    });
+
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [
+    moleculeAnalysis?.events_url,
+    setMoleculeAnalysis,
+    setScreen,
+    setSimulationResult,
+  ]);
+
+  useEffect(() => {
+    if (phase !== "heating") return;
+
+    const start = performance.now();
 
     let running = true;
 
     const tick = () => {
       if (!running) return;
 
-      const elapsed = Date.now() - start;
-
-      const p = Math.min(elapsed / effectiveDuration, 1);
-
-      setProgress(p);
-
-      const maxT = moleculeAnalysis?.break_temperature ?? 10000;
-
-      setTemperature(Math.round(1 + p * (maxT - 1)));
+      const elapsed = performance.now() - start;
+      const p = progressRef.current;
 
       setBondPulse(Math.sin(elapsed * 0.008) * 0.5 + 0.5);
 
@@ -220,44 +304,6 @@ export default function SimulationScreen() {
           .filter((particle) => particle.life < particle.maxLife)
       );
 
-      if (p >= 1) {
-        if (simulationResult === "break") {
-          const burst: Particle[] = [];
-
-          for (let i = 0; i < 60; i++) {
-            const source =
-              fittedAtoms[Math.floor(Math.random() * fittedAtoms.length)];
-
-            if (!source) continue;
-
-            const angle = Math.random() * Math.PI * 2;
-
-            const speed = 2 + Math.random() * 6;
-
-            burst.push({
-              x: source.x,
-              y: source.y,
-              vx: Math.cos(angle) * speed,
-              vy: Math.sin(angle) * speed,
-              r: 2 + Math.random() * 5,
-              color: `hsl(${Math.random() * 50 + 10}, 90%, ${
-                50 + Math.random() * 30
-              }%)`,
-              life: 0,
-              maxLife: 40 + Math.random() * 30,
-            });
-          }
-
-          setParticles(burst);
-        }
-
-        setTimeout(() => {
-          setPhase("result");
-        }, 600);
-
-        return;
-      }
-
       animFrameRef.current = requestAnimationFrame(tick);
     };
 
@@ -268,12 +314,9 @@ export default function SimulationScreen() {
       cancelAnimationFrame(animFrameRef.current);
     };
   }, [
-    totalDuration,
-    effectiveDuration,
     fittedAtoms,
     admin.simulationIntensity,
-    simulationResult,
-    moleculeAnalysis,
+    phase,
   ]);
 
   useEffect(() => {
@@ -307,6 +350,36 @@ export default function SimulationScreen() {
   }, [phase]);
 
   const isBreak = simulationResult === "break";
+
+  useEffect(() => {
+    if (phase !== "result" || !isBreak) return;
+
+    const burst: Particle[] = [];
+
+    for (let i = 0; i < 60; i++) {
+      const source = fittedAtoms[Math.floor(Math.random() * fittedAtoms.length)];
+
+      if (!source) continue;
+
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2 + Math.random() * 6;
+
+      burst.push({
+        x: source.x,
+        y: source.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: 2 + Math.random() * 5,
+        color: `hsl(${Math.random() * 50 + 10}, 90%, ${
+          50 + Math.random() * 30
+        }%)`,
+        life: 0,
+        maxLife: 40 + Math.random() * 30,
+      });
+    }
+
+    setParticles(burst);
+  }, [fittedAtoms, isBreak, phase]);
 
   const tempColor =
     progress < 0.3
@@ -426,22 +499,35 @@ export default function SimulationScreen() {
                         }%)`
                       : "hsl(270, 10%, 50%)";
 
+                  const dx = to.x - from.x;
+                  const dy = to.y - from.y;
+                  const len = Math.hypot(dx, dy) || 1;
+                  const perpX = -dy / len;
+                  const perpY = dx / len;
+                  const order = bond.order ?? 1;
+                  const gap = order === 2 ? 4 : 5;
+                  const offsets = order === 1 ? [0] : order === 2 ? [-gap, gap] : [-gap, 0, gap];
+
                   return (
-                    <line
-                      key={bond.id}
-                      x1={from.x + offFrom.dx}
-                      y1={from.y + offFrom.dy}
-                      x2={to.x + offTo.dx}
-                      y2={to.y + offTo.dy}
-                      stroke={bondColor}
-                      strokeWidth={broken ? 0 : pulseWidth}
-                      strokeLinecap="round"
-                      style={{
-                        transition: broken
-                          ? "stroke-width 0.6s ease-out"
-                          : undefined,
-                      }}
-                    />
+                    <g key={bond.id}>
+                      {offsets.map((offset, i) => (
+                        <line
+                          key={`${bond.id}_${i}`}
+                          x1={from.x + offFrom.dx + perpX * offset}
+                          y1={from.y + offFrom.dy + perpY * offset}
+                          x2={to.x + offTo.dx + perpX * offset}
+                          y2={to.y + offTo.dy + perpY * offset}
+                          stroke={bondColor}
+                          strokeWidth={broken ? 0 : order === 1 ? pulseWidth : Math.max(2, pulseWidth - 0.6)}
+                          strokeLinecap="round"
+                          style={{
+                            transition: broken
+                              ? "stroke-width 0.6s ease-out"
+                              : undefined,
+                          }}
+                        />
+                      ))}
+                    </g>
                   );
                 })}
 
@@ -556,14 +642,30 @@ export default function SimulationScreen() {
               </div>
 
               <p className="text-sm text-muted-foreground mt-3">
-                {progress < 0.3 && "Aquecendo suavemente..."}
+                {streamStatus === "connecting" && "Conectando ao simulador..."}
 
-                {progress >= 0.3 &&
+                {streamStatus === "running" &&
+                  progress < 0.3 &&
+                  "Aquecendo suavemente..."}
+
+                {streamStatus === "running" &&
+                  progress >= 0.3 &&
                   progress < 0.7 &&
                   "⚡ Mais energia, mais vibração..."}
 
-                {progress >= 0.7 && "🔥 Temperatura crítica!"}
+                {streamStatus === "running" &&
+                  progress >= 0.7 &&
+                  "🔥 Temperatura crítica!"}
+
+                {streamStatus === "complete" && "Resultado recebido."}
               </p>
+
+              {(cacheMessage || candidateBrokenBonds.length > 0) && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {cacheMessage ??
+                    `${candidateBrokenBonds.length} ligação(ões) sob tensão crítica`}
+                </p>
+              )}
             </div>
 
             {/* Result */}
@@ -619,6 +721,28 @@ export default function SimulationScreen() {
                           <p className="font-medium">
                             {moleculeAnalysis.molecular_weight.toFixed(2)} g/mol
                           </p>
+                        </div>
+                      )}
+
+                      {moleculeAnalysis.elapsed_seconds != null && (
+                        <div>
+                          <p className="text-muted-foreground text-xs uppercase">
+                            Tempo
+                          </p>
+
+                          <p className="font-medium">
+                            {moleculeAnalysis.elapsed_seconds.toFixed(2)} s
+                          </p>
+                        </div>
+                      )}
+
+                      {moleculeAnalysis.cached && (
+                        <div>
+                          <p className="text-muted-foreground text-xs uppercase">
+                            Fonte
+                          </p>
+
+                          <p className="font-medium">Cache</p>
                         </div>
                       )}
                     </div>
