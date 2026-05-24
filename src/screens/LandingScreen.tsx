@@ -2,7 +2,6 @@
 
 import React from "react";
 import { useExperience } from "@/context/ExperienceContext";
-import IntroSteps from "@/components/IntroSteps";
 import { Button } from "@/components/ui/button";
 import { Sparkles, FlaskConical, PencilRuler, Stars } from "lucide-react";
 
@@ -10,7 +9,7 @@ export default function LandingScreen() {
   const { setScreen } = useExperience();
 
   return (
-    <div className="relative h-screen overflow-hidden bg-background">
+    <div className="relative min-h-screen overflow-x-hidden bg-background">
       {/* 📄 Fundo estilo papel */}
       <div
         className="
@@ -21,9 +20,9 @@ export default function LandingScreen() {
       />
 
       {/* ✨ manchas coloridas */}
-      <div className="absolute top-10 left-10 w-72 h-72 rounded-full bg-primary/15 blur-3xl animate-float" />
+      <div className="pointer-events-none absolute top-10 left-10 w-72 h-72 rounded-full bg-primary/15 blur-3xl animate-float" />
       <div
-        className="absolute bottom-10 right-10 w-96 h-96 rounded-full bg-accent/15 blur-3xl animate-float"
+        className="pointer-events-none absolute bottom-10 right-10 w-96 h-96 rounded-full bg-accent/15 blur-3xl animate-float"
         style={{ animationDelay: "2s" }}
       />
 
@@ -36,17 +35,17 @@ export default function LandingScreen() {
         ✎
       </div>
 
-      <div className="relative z-10 flex flex-col items-center justify-center px-6 py-20 text-center">
+      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 py-8 text-center sm:px-6 sm:py-12 md:py-16">
         {/* Badge */}
-        <div className="paper-tag flex items-center gap-2 mb-8 animate-fade-in">
+        <div className="paper-tag mb-5 flex items-center gap-2 animate-fade-in sm:mb-6 md:mb-8">
           <Sparkles className="w-4 h-4 text-accent" />
           <span className="text-sm">Ciência Aberta • CNPEM • Ilum</span>
         </div>
 
         {/* 🧪 Ícone */}
-        <div className="mb-8 relative">
-          <div className="gradient-bg yellow atom-shadow w-28 h-28 rounded-[38%_62%_55%_45%/45%_45%_55%_55%] flex items-center justify-center rotate-[-6deg]">
-            <FlaskConical className="w-14 h-14 text-foreground" />
+        <div className="relative mb-5 sm:mb-6 md:mb-8">
+          <div className="gradient-bg yellow atom-shadow flex h-20 w-20 rotate-[-6deg] items-center justify-center rounded-[38%_62%_55%_45%/45%_45%_55%_55%] sm:h-24 sm:w-24 md:h-28 md:w-28">
+            <FlaskConical className="h-10 w-10 text-foreground sm:h-12 sm:w-12 md:h-14 md:w-14" />
           </div>
 
           <div className="absolute -top-3 -right-4 text-2xl animate-bounceSoft">
@@ -58,9 +57,10 @@ export default function LandingScreen() {
         <h1
           className="
             font-display
-            text-5xl
-            sm:text-6xl
-            md:text-8xl
+            text-4xl
+            sm:text-5xl
+            md:text-7xl
+            xl:text-8xl
             leading-[0.95]
             max-w-5xl
             animate-fade-in
@@ -78,24 +78,27 @@ export default function LandingScreen() {
         {/* 📒 Subtítulo */}
         <div
           className="
-            mt-8
+            mt-5
             max-w-2xl
             gradient-bg-subtle
-            p-6
+            p-4
             rotate-[0.4deg]
             animate-fade-in
+            sm:mt-6
+            md:mt-8
+            md:p-6
           "
           style={{
             animationDelay: "0.2s",
             animationFillMode: "backwards",
           }}
         >
-          <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
+          <p className="text-base leading-relaxed text-muted-foreground md:text-xl">
             Monte moléculas, aumente a temperatura e descubra quais estruturas
             conseguem sobreviver ao caos térmico.
           </p>
 
-          <div className="mt-4 flex justify-center gap-3 flex-wrap">
+          <div className="mt-3 flex flex-wrap justify-center gap-2 sm:mt-4 sm:gap-3">
             <span className="marker-highlight">Interativo</span>
 
             <span className="marker-highlight">Educacional</span>
@@ -106,7 +109,7 @@ export default function LandingScreen() {
 
         {/* 🎮 CTA */}
         <div
-          className="mt-10 animate-fade-in"
+          className="mt-6 animate-fade-in md:mt-10"
           style={{
             animationDelay: "0.3s",
             animationFillMode: "backwards",
@@ -119,19 +122,25 @@ export default function LandingScreen() {
             className="
               sticker-btn
               wiggle
-              text-2xl
-              px-10
-              py-7
+              px-6
+              py-4
+              text-lg
               rotate-[-2deg]
+              sm:px-8
+              sm:py-5
+              sm:text-xl
+              md:px-10
+              md:py-7
+              md:text-2xl
             "
           >
-            <PencilRuler className="w-6 h-6 mr-2" />
+            <PencilRuler className="mr-2 h-5 w-5 md:h-6 md:w-6" />
             Começar Experimento
           </Button>
         </div>
 
         {/* ⭐ mini info */}
-        <div className="mt-6 flex items-center gap-2 text-muted-foreground text-sm rotate-[1deg]">
+        <div className="mt-4 flex rotate-[1deg] items-center gap-2 text-sm text-muted-foreground md:mt-6">
           <Stars className="w-4 h-4 text-primary" />
           Crie • Teste • Descubra
         </div>
